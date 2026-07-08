@@ -66,6 +66,16 @@
   .retry{ background:var(--amber); }
   .retry:active{ background:#9c6215; }
 
+  .toast{
+    position:fixed; left:16px; right:16px; top:calc(16px + env(safe-area-inset-top));
+    background:var(--go); color:#fff; text-align:center;
+    font-size:1.5rem; font-weight:800; padding:20px 18px; border-radius:20px;
+    box-shadow:0 10px 30px rgba(0,0,0,.22); z-index:50;
+    opacity:0; transform:translateY(-14px); pointer-events:none;
+    transition:opacity .25s ease, transform .25s ease;
+  }
+  .toast.visible{ opacity:1; transform:translateY(0); }
+
   .hidden{ display:none !important; }
 </style>
 </head>
@@ -85,14 +95,6 @@
   <!-- Saving -->
   <button class="bigbtn" id="savingBtn" disabled hidden>Saving…</button>
 
-  <!-- Done -->
-  <div class="panel hidden" id="donePanel">
-    <div class="mark">✓</div>
-    <h2>Saved!</h2>
-    <p>Thank you. You can close this now.</p>
-    <button class="again" id="againBtn">Record again</button>
-  </div>
-
   <!-- Error -->
   <div class="hidden" id="errorWrap">
     <div class="panel" style="margin-bottom:18px;">
@@ -103,6 +105,8 @@
     <button class="bigbtn retry" id="retryBtn">Try again</button>
   </div>
 </main>
+
+<div class="toast" id="toast" role="status" aria-live="polite">Recording saved ✓</div>
 
 <script>
 /* =========================================================
@@ -116,8 +120,7 @@ const els = {
   timer: document.getElementById('timer'),
   main: document.getElementById('mainBtn'),
   saving: document.getElementById('savingBtn'),
-  done: document.getElementById('donePanel'),
-  again: document.getElementById('againBtn'),
+  toast: document.getElementById('toast'),
   errorWrap: document.getElementById('errorWrap'),
   errTitle: document.getElementById('errTitle'),
   errText: document.getElementById('errText'),
@@ -146,7 +149,6 @@ function show(state){
   els.timer.classList.toggle('hidden', state !== 'recording');
   els.main.hidden   = !(state === 'idle' || state === 'recording');
   els.saving.hidden = state !== 'saving';
-  els.done.classList.toggle('hidden', state !== 'done');
   els.errorWrap.classList.toggle('hidden', state !== 'error');
 
   if(state === 'idle'){
@@ -160,8 +162,14 @@ function show(state){
     els.top.textContent = "I'm listening… tap Stop when you're done.";
   }
   if(state === 'saving') els.top.textContent = 'Please wait a moment…';
-  if(state === 'done')   els.top.textContent = '';
   if(state === 'error')  els.top.textContent = '';
+}
+
+let toastTimer;
+function showToast(){
+  els.toast.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> els.toast.classList.remove('visible'), 6000);
 }
 
 function fmt(s){
@@ -240,7 +248,9 @@ async function upload(blob){
     const resp = await fetch(SCRIPT_URL, { method:'POST', body });
     const json = await resp.json();
     if(!json || !json.ok) throw new Error('server');
-    show('done');
+    lastBlob = null;
+    show('idle');
+    showToast();
   }catch(e){
     els.errTitle.textContent = "That didn't save";
     els.errText.textContent = 'Check the internet and tap the button below.';
@@ -256,7 +266,6 @@ els.main.addEventListener('click', ()=>{
     startRecording();
   }
 });
-els.again.addEventListener('click', ()=> show('idle'));
 els.retry.addEventListener('click', ()=>{
   if(lastBlob) upload(lastBlob);   // don't lose the recording
   else show('idle');
